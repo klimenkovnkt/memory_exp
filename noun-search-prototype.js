@@ -1,4 +1,31 @@
 /* =========================
+АДАПТИВНЫЕ РАЗМЕРЫ
+Вычисляются один раз на основе размера окна браузера
+========================= */
+function getAdaptiveSizes() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const minDim = Math.min(w, h);
+
+    // Радиус окружности = 35% от меньшей стороны экрана, но не более 360px
+    const circle_radius = Math.min(minDim * 0.35, 360);
+
+    // Размер кольца = 14% от меньшей стороны, но не более 180px
+    const ring_px = Math.min(minDim * 0.14, 180);
+
+    // Размер объекта = 70% от кольца
+    const stim_px = Math.round(ring_px * 0.7);
+
+    // Размер арены = чуть больше диаметра окружности + запас
+    const arena_size = Math.round(circle_radius * 2 + ring_px + 100);
+
+    return { circle_radius, ring_px, stim_px, arena_size };
+}
+
+const ADAPTIVE = getAdaptiveSizes();
+console.log("Adaptive sizes:", ADAPTIVE);
+
+/* =========================
 BASIC CONFIG
 ========================= */
 const CONFIG = {
@@ -12,10 +39,12 @@ const CONFIG = {
     search_timeout_ms: 5000,
     feedback_ms: 700,
 
-    stim_px: 120,
-    ring_px: 180,
+    // Размеры теперь берутся из ADAPTIVE
+    stim_px: ADAPTIVE.stim_px,
+    ring_px: ADAPTIVE.ring_px,
+    circle_radius: ADAPTIVE.circle_radius,
+    arena_size: ADAPTIVE.arena_size,
 
-    circle_radius: 360,
     circle_start_angle: -3 * Math.PI / 4,
 
     stim_templates_count: 8,
@@ -44,12 +73,10 @@ const jsPsych = initJsPsych({
             type: jsPsychExtensionPipe,
             params: {
                 experiment_id: "ktbMNGnc4ZoC",
-                // filename будет подставлен автоматически как {subject_id}.csv
             }
         }
     ],
     on_finish: function () {
-        // DataPipe сам отправит данные. Просто показываем таблицу.
         jsPsych.data.displayData();
     },
 });
@@ -61,8 +88,7 @@ const idTrial = {
     type: jsPsychSurveyHtmlForm,
     html: `
         <div style="display:flex; flex-direction:column; align-items:center; gap:20px; padding:40px;">
-            <h2>Введите ID испытуемого</h2>
-            <p>Например: id_1, id_124, sub001</p>
+            <h2>Введите ID, который вам сообщил экспериментатор</h2>
             <input type="text" name="participant_id" required placeholder="id_1"
                    style="font-size:24px; padding:10px 20px; border:2px solid #333; border-radius:8px; text-align:center; width:300px;">
             <button type="submit"
@@ -86,8 +112,6 @@ const idTrial = {
         window.PARTICIPANT_ID = rawId;
         window.SEED = seed;
 
-        // ВАЖНО: устанавливаем subject_id для DataPipe
-        // DataPipe использует его как имя файла: {subject_id}.csv
         jsPsych.data.addProperties({
             subject_id: rawId
         });
@@ -160,8 +184,9 @@ function createTrials(items, repeats) {
 /* =========================
 POSITION GENERATION (СТРОГО ПО ОКРУЖНОСТИ)
 ========================= */
-function generateSearchPositions({ nItems, arenaW = 1280, arenaH = 860 }) {
-    const cx = arenaW / 2, cy = arenaH / 2;
+function generateSearchPositions({ nItems }) {
+    const cx = CONFIG.arena_size / 2;
+    const cy = CONFIG.arena_size / 2;
     const radius = CONFIG.circle_radius;
     const angleStep = (Math.PI * 2) / nItems;
 
@@ -213,7 +238,7 @@ function singleObjectWithRingHTML(targetPath, gapSide) {
 function searchArrayHTML({ targetId, distractorIds, gapSideTarget, setSize }) {
     const ids = shuffle([targetId, ...distractorIds]);
     const positions = generateSearchPositions({ nItems: setSize });
-    let html = `<div class="arena-wrap"><div class="arena"><div class="arena-fix">+</div>`;
+    let html = `<div class="arena-wrap"><div class="arena" style="width:${CONFIG.arena_size}px; height:${CONFIG.arena_size}px;"><div class="arena-fix">+</div>`;
     const targetIndex = ids.indexOf(targetId);
 
     ids.forEach((id, idx) => {
@@ -353,24 +378,25 @@ const timeline = [];
 timeline.push(idTrial);
 timeline.push({ type: jsPsychPreload, images: PRELOAD_IMAGES });
 
+// --- ЭКРАН 2: Главная инструкция ---
 timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `<div class="screen-wrap"><div class="instr">
         <h1>Инструкция</h1>
         <p>В этом задании вам будут показывать необычные предметы.</p>
-        <p>Иногда нужно будет найти определённый предмет среди других. После нахождения цели нужно ответить про разрыв кольца <strong>вокруг этого предмета</strong>.</p>
+        <p>Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
         <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
         <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
     </div></div>`,
     choices: "ALL_KEYS"
 });
 
-// --- БЛОК 1: stim_templates с поиском ---
+// --- ЭКРАН 3: Блок 1 — Поиск ---
 timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `<div class="screen-wrap"><div class="instr">
         <h2>Блок 1: Поиск</h2>
-        <p>Запоминайте предметы и ищите их в массиве из 8 объектов.</p>
+        <p>Запоминайте предметы и ищите их среди остальных объектов.</p>
         <div class="small-note">Нажмите любую клавишу.</div>
     </div></div>`,
     choices: "ALL_KEYS"
@@ -392,12 +418,12 @@ block1Trials.forEach(({ id, side }) => {
     timeline.push(makeFeedbackTrial());
 });
 
-// --- БЛОК 2: without_search ---
+// --- ЭКРАН 4: Блок 2 — Знакомство ---
 timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `<div class="screen-wrap"><div class="instr">
         <h2>Блок 2: Знакомство</h2>
-        <p>Сначала посмотрите на предмет, затем вокруг него появится кольцо. Укажите, где разрыв.</p>
+        <p>Сначала посмотрите на предмет, затем вокруг него появится кольцо. Укажите, где разрыв. Старайтесь не отводить взгляд от предмета!</p>
         <div class="small-note">Нажмите любую клавишу.</div>
     </div></div>`,
     choices: "ALL_KEYS"
@@ -417,14 +443,14 @@ block2Trials.forEach(({ id, side }) => {
     timeline.push(makeFeedbackTrial());
 });
 
-// --- ФАЗА ПОИСКА (ТЕСТ) ---
+// --- ЭКРАН 5: Фаза поиска (Тест) ---
 timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `<div class="screen-wrap"><div class="instr">
         <h2>Фаза поиска (Тест)</h2>
-        <p>Теперь в качестве цели могут появляться разные предметы.</p>
-        <p>В массиве может быть 4, 8 или 12 объектов.</p>
-        <div class="small-note">Нажмите любую клавишу.</div>
+        <p>Теперь вам вновь необходимо искать предметы. Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
+        <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
+        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
     </div></div>`,
     choices: "ALL_KEYS"
 });
