@@ -88,7 +88,19 @@ const idTrial = {
             </button>
         </div>
     `,
-    button_label: "",
+    button_label: "",  // Скрываем стандартную кнопку
+    on_load: function() {
+        // Этот callback вызывается ПОСЛЕ рендера формы — кнопка точно есть в DOM
+        const btn = document.getElementById('custom-start-btn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                const form = document.querySelector('.jspsych-survey-html-form');
+                if (form) {
+                    form.requestSubmit();
+                }
+            });
+        }
+    },
     on_finish: function (data) {
         const rawId = data.response.participant_id;
         const match = rawId.match(/\d+/);
@@ -403,32 +415,6 @@ function enterFullscreen() {
     }
 }
 
-function attachStartButton() {
-    const customBtn = document.getElementById('custom-start-btn');
-    if (customBtn) {
-        customBtn.addEventListener('click', function() {
-            const submitBtn = document.querySelector('.jspsych-survey-html-form-submit');
-            if (submitBtn) submitBtn.click();
-        });
-    }
-}
-
-const observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-        if (mutation.addedNodes.length) {
-            const customBtn = document.getElementById('custom-start-btn');
-            if (customBtn) {
-                customBtn.addEventListener('click', function() {
-                    const submitBtn = document.querySelector('.jspsych-survey-html-form-submit');
-                    if (submitBtn) submitBtn.click();
-                });
-                observer.disconnect();
-            }
-        }
-    });
-});
-observer.observe(document.body, { childList: true, subtree: true });
-
 document.getElementById('start-fullscreen-btn').addEventListener('click', enterFullscreen);
 
 document.addEventListener('keydown', function(e) {
@@ -475,42 +461,6 @@ timeline.push({
 
 window.trainingSearchCorrect = 0;
 
-const trainingSearchLoop = {
-    timeline: [
-        makeFixationTrial({ block: "training_search" }),
-        makeCueTrial(TRAINING_TARGET, true, { block: "training_search" }),
-        makeDelayTrial({ block: "training_search" }),
-        {
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: function() {
-                const gapSide = sampleOne(["left", "right"]);
-                const distractorIds = pickDistractors(TRAINING_TARGET, DISTRACTORS, 7);
-                return searchArrayHTML({ targetId: TRAINING_TARGET, distractorIds, gapSideTarget: gapSide, setSize: 8 });
-            },
-            choices: [CONFIG.left_key, CONFIG.right_key],
-            trial_duration: CONFIG.search_timeout_ms,
-            response_ends_trial: true,
-            data: {
-                trial_kind: "training_search",
-                block: "training_search",
-                target_id: TRAINING_TARGET,
-                participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
-            },
-            on_finish: function(data) {
-                // Получаем правильный ответ из последнего trial
-                const lastTrial = jsPsych.data.get().last(1).values()[0];
-                // Восстанавливаем correct_gap из stimulus функции
-                // Нужно сохранить gapSide в data
-            },
-        },
-        makeFeedbackTrial(),
-    ],
-    loop_function: function() {
-        return window.trainingSearchCorrect < 5;
-    }
-};
-
-// Переделываем тренировку поиска с сохранением gapSide
 const trainingSearchTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -543,7 +493,7 @@ const trainingSearchTrial = {
     },
 };
 
-const trainingSearchLoopFixed = {
+const trainingSearchLoop = {
     timeline: [
         makeFixationTrial({ block: "training_search" }),
         makeCueTrial(TRAINING_TARGET, true, { block: "training_search" }),
@@ -556,7 +506,7 @@ const trainingSearchLoopFixed = {
     }
 };
 
-timeline.push(trainingSearchLoopFixed);
+timeline.push(trainingSearchLoop);
 
 // --- Переход к основному блоку поиска ---
 timeline.push({
