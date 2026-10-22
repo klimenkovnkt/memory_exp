@@ -85,335 +85,7 @@ const jsPsych = initJsPsych({
 });
 
 /* =========================
-ВВОД ID — ЗДЕСЬ УСТАНАВЛИВАЕМ SEED И ДЕЛАЕМ SHUFFLE
-========================= */
-const idTrial = {
-    type: jsPsychSurveyHtmlForm,
-    html: `
-        <div style="display:flex; flex-direction:column; align-items:center; gap:20px; padding:40px;">
-            <h2>Введите ID, который вам сообщил экспериментатор</h2>
-            <input type="text" name="participant_id" required placeholder="id_1"
-                   style="font-size:24px; padding:10px 20px; border:2px solid #333; border-radius:8px; text-align:center; width:300px;">
-        </div>
-    `,
-    button_label: "Начать",
-    on_finish: function (data) {
-        const rawId = data.response.participant_id;
-        const match = rawId.match(/\d+/);
-        if (!match) {
-            alert("ID должен содержать число! Например: id_1");
-            location.reload();
-            return;
-        }
-        const seed = parseInt(match[0]);
-        
-        // ВАЖНО: устанавливаем seed ДО перемешивания!
-        jsPsych.randomization.setSeed(seed);
-
-        window.PARTICIPANT_ID = rawId;
-        window.SEED = seed;
-
-        jsPsych.data.addProperties({
-            subject_id: rawId
-        });
-
-        // ТЕПЕРЬ делаем shuffle — seed уже установлен!
-        const shuffledIds = jsPsych.randomization.shuffle([...ALL_OBJECT_IDS]);
-        let idx = 0;
-        const STIM_TEMPLATES = shuffledIds.slice(idx, idx += CONFIG.stim_templates_count);
-        const WITHOUT_SEARCH = shuffledIds.slice(idx, idx += CONFIG.without_search_count);
-        const NEW_STIMS = shuffledIds.slice(idx, idx += CONFIG.new_stims_count);
-        const NEWEST_STIMS = shuffledIds.slice(idx, idx += CONFIG.newest_stims_count);
-        const DISTRACTORS = shuffledIds.slice(idx);
-
-        const TRAINING_TARGET = DISTRACTORS[0];
-        const DISTRACTORS_WITHOUT_TRAINING = DISTRACTORS.slice(1);
-
-        // Сохраняем в window для доступа из функций
-        window.STIM_TEMPLATES = STIM_TEMPLATES;
-        window.WITHOUT_SEARCH = WITHOUT_SEARCH;
-        window.NEW_STIMS = NEW_STIMS;
-        window.NEWEST_STIMS = NEWEST_STIMS;
-        window.DISTRACTORS_WITHOUT_TRAINING = DISTRACTORS_WITHOUT_TRAINING;
-        window.TRAINING_TARGET = TRAINING_TARGET;
-
-        console.log("SEED:", seed);
-        console.log("TRAINING_TARGET:", TRAINING_TARGET);
-        console.log("STIM_TEMPLATES:", STIM_TEMPLATES);
-        console.log("WITHOUT_SEARCH:", WITHOUT_SEARCH);
-        console.log("NEW_STIMS:", NEW_STIMS);
-        console.log("NEWEST_STIMS:", NEWEST_STIMS);
-        console.log("DISTRACTORS_WITHOUT_TRAINING:", DISTRACTORS_WITHOUT_TRAINING);
-
-        const PRELOAD_IMAGES = [
-            CONFIG.paths.ring_left, CONFIG.paths.ring_right,
-            ...STIM_TEMPLATES.map(objPath), ...WITHOUT_SEARCH.map(objPath),
-            ...NEW_STIMS.map(objPath), ...NEWEST_STIMS.map(objPath),
-            ...DISTRACTORS_WITHOUT_TRAINING.map(objPath),
-            objPath(TRAINING_TARGET)
-        ];
-
-        // Добавляем остальные триалы в timeline
-        timeline.push({ type: jsPsychPreload, images: PRELOAD_IMAGES });
-
-        // Главная инструкция
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h1>Инструкция</h1>
-                <p>В этом задании вам будут показывать необычные предметы.</p>
-                <p>Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
-                <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
-                <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        // Тренировка поиска
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Тренировка: Поиск</h2>
-                <p>Сейчас будет тренировка. Вам нужно найти предмет среди 8 объектов.</p>
-                <p>Тренировка продлится до 5 правильных ответов.</p>
-                <div class="small-note">Нажмите любую клавишу.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        window.trainingSearchCorrect = 0;
-
-        const trainingSearchTrial = {
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: function() {
-                const gapSide = sampleOne(["left", "right"]);
-                const distractorIds = pickDistractors(TRAINING_TARGET, DISTRACTORS_WITHOUT_TRAINING, 7);
-                window.currentTrainingGapSide = gapSide;
-                return searchArrayHTML({ targetId: TRAINING_TARGET, distractorIds, gapSideTarget: gapSide, setSize: 8 });
-            },
-            choices: [CONFIG.left_key, CONFIG.right_key],
-            trial_duration: CONFIG.search_timeout_ms,
-            response_ends_trial: true,
-            data: {
-                trial_kind: "training_search",
-                block: "training_search",
-                target_id: TRAINING_TARGET,
-                correct_gap: function() { return window.currentTrainingGapSide; },
-                participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
-            },
-            on_finish: function(data) {
-                const correctKey = getCorrectKey(window.currentTrainingGapSide);
-                if (data.response === null) {
-                    data.correct = 0;
-                } else {
-                    data.correct = (data.response.toLowerCase() === correctKey.toLowerCase()) ? 1 : 0;
-                }
-                if (data.correct) {
-                    window.trainingSearchCorrect++;
-                }
-                console.log("Training search correct count:", window.trainingSearchCorrect);
-            },
-        };
-
-        const trainingSearchLoop = {
-            timeline: [
-                makeFixationTrial({ block: "training_search" }),
-                makeCueTrial(TRAINING_TARGET, true, { block: "training_search" }),
-                makeDelayTrial({ block: "training_search" }),
-                trainingSearchTrial,
-                makeFeedbackTrial(),
-            ],
-            loop_function: function() {
-                return window.trainingSearchCorrect < 5;
-            }
-        };
-
-        timeline.push(trainingSearchLoop);
-
-        // Переход к основному блоку поиска
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Тренировка завершена!</h2>
-                <p>Теперь начинается основное задание. Обратной связи больше не будет.</p>
-                <p>Готовы приступить к основному блоку?</p>
-                <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        // Основной блок 1
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Блок 1: Поиск</h2>
-                <p>Запоминайте предметы и ищите их среди остальных объектов.</p>
-                <div class="small-note">Нажмите любую клавишу.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        const block1Trials = createTrials(STIM_TEMPLATES, CONFIG.repeats_per_item);
-        block1Trials.forEach(({ id, side }) => {
-            timeline.push(makeFixationTrial({ block: "stim_templates_search" }));
-            timeline.push(makeCueTrial(id, false, { block: "stim_templates_search" }));
-            timeline.push(makeDelayTrial({ block: "stim_templates_search" }));
-            timeline.push(makeSearchTrial({
-                targetId: id,
-                distractorPool: DISTRACTORS_WITHOUT_TRAINING,
-                setSize: 8,
-                block: "stim_templates_search",
-                condition: "stim_templates",
-                gapSide: side
-            }));
-        });
-
-        // Тренировка without_search
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Тренировка: Знакомство</h2>
-                <p>Сначала посмотрите на предмет, затем вокруг него появится кольцо. Укажите, где разрыв.</p>
-                <p>Тренировка продлится до 5 правильных ответов.</p>
-                <div class="small-note">Нажмите любую клавишу.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        window.trainingFamiliarCorrect = 0;
-
-        const trainingFamiliarTrial = {
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: function() {
-                const gapSide = sampleOne(["left", "right"]);
-                window.currentTrainingFamiliarGapSide = gapSide;
-                return singleObjectWithRingHTML(objPath(TRAINING_TARGET), gapSide, true);
-            },
-            choices: [CONFIG.left_key, CONFIG.right_key],
-            trial_duration: CONFIG.search_timeout_ms,
-            response_ends_trial: true,
-            data: {
-                trial_kind: "training_familiar",
-                block: "training_familiar",
-                target_id: TRAINING_TARGET,
-                correct_gap: function() { return window.currentTrainingFamiliarGapSide; },
-                participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
-            },
-            on_finish: function(data) {
-                const correctKey = getCorrectKey(window.currentTrainingFamiliarGapSide);
-                if (data.response === null) {
-                    data.correct = 0;
-                } else {
-                    data.correct = (data.response.toLowerCase() === correctKey.toLowerCase()) ? 1 : 0;
-                }
-                if (data.correct) {
-                    window.trainingFamiliarCorrect++;
-                }
-                console.log("Training familiar correct count:", window.trainingFamiliarCorrect);
-            },
-        };
-
-        const trainingFamiliarLoop = {
-            timeline: [
-                makeFixationTrial({ block: "training_familiar" }),
-                makeStudyTrial(TRAINING_TARGET, { block: "training_familiar" }),
-                makeDelayTrial({ block: "training_familiar" }),
-                trainingFamiliarTrial,
-                makeFeedbackTrial(),
-            ],
-            loop_function: function() {
-                return window.trainingFamiliarCorrect < 5;
-            }
-        };
-
-        timeline.push(trainingFamiliarLoop);
-
-        // Переход к основному блоку without_search
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Тренировка завершена!</h2>
-                <p>Теперь начинается основное задание. Обратной связи больше не будет.</p>
-                <p>Готовы приступить к основному блоку?</p>
-                <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        // Основной блок 2
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Блок 2: Знакомство</h2>
-                <p>Сначала посмотрите на предмет, затем вокруг него появится кольцо. Укажите, где разрыв. Старайтесь не отводить взгляд от предмета!</p>
-                <div class="small-note">Нажмите любую клавишу.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        const block2Trials = createTrials(WITHOUT_SEARCH, CONFIG.repeats_per_item);
-        block2Trials.forEach(({ id, side }) => {
-            timeline.push(makeFixationTrial({ block: "without_search" }));
-            timeline.push(makeStudyTrial(id, { block: "without_search" }));
-            timeline.push(makeDelayTrial({ block: "without_search" }));
-            timeline.push(makeFamiliarTrial({
-                targetId: id,
-                block: "without_search",
-                condition: "without_search",
-                gapSide: side,
-                showLabel: false
-            }));
-        });
-
-        // Фаза поиска (тест)
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Фаза поиска (Тест)</h2>
-                <p>Теперь вам вновь необходимо искать предметы. Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
-                <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
-                <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-
-        const testPool = [...STIM_TEMPLATES, ...WITHOUT_SEARCH, ...NEW_STIMS];
-        const testTrials = createTrials(testPool, CONFIG.repeats_per_item);
-        testTrials.forEach(({ id, side }) => {
-            let cond = "new_stims";
-            if (STIM_TEMPLATES.includes(id)) cond = "stim_templates";
-            else if (WITHOUT_SEARCH.includes(id)) cond = "without_search";
-
-            const setSize = sampleOne(CONFIG.set_sizes);
-
-            timeline.push(makeFixationTrial({ block: "test_search" }));
-            timeline.push(makeCueTrial(id, false, { block: "test_search", condition: cond }));
-            timeline.push(makeDelayTrial({ block: "test_search" }));
-            timeline.push(makeSearchTrial({
-                targetId: id,
-                distractorPool: [...DISTRACTORS_WITHOUT_TRAINING, ...NEWEST_STIMS],
-                setSize: setSize,
-                block: "test_search",
-                condition: cond,
-                gapSide: side
-            }));
-        });
-
-        // Конец
-        timeline.push({
-            type: jsPsychHtmlKeyboardResponse,
-            stimulus: `<div class="screen-wrap"><div class="instr">
-                <h2>Спасибо!</h2>
-                <p>Эксперимент завершён. Данные отправлены.</p>
-                <div class="small-note">Нажмите любую клавишу, чтобы увидеть таблицу данных.</div>
-            </div></div>`,
-            choices: "ALL_KEYS"
-        });
-    },
-};
-
-/* =========================
-HELPERS
+HELPERS (определены ДО idTrial, т.к. используются внутри)
 ========================= */
 function sampleOne(arr) { return jsPsych.randomization.sampleWithoutReplacement(arr, 1)[0]; }
 function shuffle(arr) { return jsPsych.randomization.shuffle(arr); }
@@ -441,9 +113,6 @@ function createTrials(items, repeats) {
     return jsPsych.randomization.shuffle(trials);
 }
 
-/* =========================
-POSITION GENERATION
-========================= */
 function generateSearchPositions({ nItems }) {
     const cx = CONFIG.arena_size / 2;
     const cy = CONFIG.arena_size / 2;
@@ -642,6 +311,339 @@ function makeFamiliarTrial({ targetId, block, condition, gapSide, showLabel }) {
 }
 
 /* =========================
+ВВОД ID — ЗДЕСЬ УСТАНАВЛИВАЕМ SEED, ДЕЛАЕМ SHUFFLE И ДОБАВЛЯЕМ ТРИАЛЫ
+========================= */
+const idTrial = {
+    type: jsPsychSurveyHtmlForm,
+    html: `
+        <div style="display:flex; flex-direction:column; align-items:center; gap:20px; padding:40px;">
+            <h2>Введите ID, который вам сообщил экспериментатор</h2>
+            <input type="text" name="participant_id" required placeholder="id_1"
+                   style="font-size:24px; padding:10px 20px; border:2px solid #333; border-radius:8px; text-align:center; width:300px;">
+        </div>
+    `,
+    button_label: "Начать",
+    on_finish: function (data) {
+        const rawId = data.response.participant_id;
+        const match = rawId.match(/\d+/);
+        if (!match) {
+            alert("ID должен содержать число! Например: id_1");
+            location.reload();
+            return;
+        }
+        const seed = parseInt(match[0]);
+        
+        // ВАЖНО: устанавливаем seed ДО перемешивания!
+        jsPsych.randomization.setSeed(seed);
+
+        window.PARTICIPANT_ID = rawId;
+        window.SEED = seed;
+
+        jsPsych.data.addProperties({
+            subject_id: rawId
+        });
+
+        // ТЕПЕРЬ делаем shuffle — seed уже установлен!
+        const shuffledIds = jsPsych.randomization.shuffle([...ALL_OBJECT_IDS]);
+        let idx = 0;
+        const STIM_TEMPLATES = shuffledIds.slice(idx, idx += CONFIG.stim_templates_count);
+        const WITHOUT_SEARCH = shuffledIds.slice(idx, idx += CONFIG.without_search_count);
+        const NEW_STIMS = shuffledIds.slice(idx, idx += CONFIG.new_stims_count);
+        const NEWEST_STIMS = shuffledIds.slice(idx, idx += CONFIG.newest_stims_count);
+        const DISTRACTORS = shuffledIds.slice(idx);
+
+        const TRAINING_TARGET = DISTRACTORS[0];
+        const DISTRACTORS_WITHOUT_TRAINING = DISTRACTORS.slice(1);
+
+        console.log("SEED:", seed);
+        console.log("TRAINING_TARGET:", TRAINING_TARGET);
+        console.log("STIM_TEMPLATES:", STIM_TEMPLATES);
+        console.log("WITHOUT_SEARCH:", WITHOUT_SEARCH);
+        console.log("NEW_STIMS:", NEW_STIMS);
+        console.log("NEWEST_STIMS:", NEWEST_STIMS);
+        console.log("DISTRACTORS_WITHOUT_TRAINING:", DISTRACTORS_WITHOUT_TRAINING);
+
+        const PRELOAD_IMAGES = [
+            CONFIG.paths.ring_left, CONFIG.paths.ring_right,
+            ...STIM_TEMPLATES.map(objPath), ...WITHOUT_SEARCH.map(objPath),
+            ...NEW_STIMS.map(objPath), ...NEWEST_STIMS.map(objPath),
+            ...DISTRACTORS_WITHOUT_TRAINING.map(objPath),
+            objPath(TRAINING_TARGET)
+        ];
+
+        // === ДОБАВЛЯЕМ ВСЕ ОСТАЛЬНЫЕ ТРИАЛЫ ЧЕРЕЗ addNodeToEndOfTimeline ===
+        jsPsych.addNodeToEndOfTimeline({
+            timeline: [
+                { type: jsPsychPreload, images: PRELOAD_IMAGES },
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h1>Инструкция</h1>
+                        <p>В этом задании вам будут показывать необычные предметы.</p>
+                        <p>Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
+                        <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+                // Тренировка поиска
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Тренировка: Поиск</h2>
+                        <p>Сейчас будет тренировка. Вам нужно найти предмет среди 8 объектов.</p>
+                        <p>Тренировка продлится до 5 правильных ответов.</p>
+                        <div class="small-note">Нажмите любую клавишу.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+                {
+                    timeline: [
+                        makeFixationTrial({ block: "training_search" }),
+                        makeCueTrial(TRAINING_TARGET, true, { block: "training_search" }),
+                        makeDelayTrial({ block: "training_search" }),
+                        {
+                            type: jsPsychHtmlKeyboardResponse,
+                            stimulus: function() {
+                                const gapSide = sampleOne(["left", "right"]);
+                                const distractorIds = pickDistractors(TRAINING_TARGET, DISTRACTORS_WITHOUT_TRAINING, 7);
+                                window.currentTrainingGapSide = gapSide;
+                                return searchArrayHTML({ targetId: TRAINING_TARGET, distractorIds, gapSideTarget: gapSide, setSize: 8 });
+                            },
+                            choices: [CONFIG.left_key, CONFIG.right_key],
+                            trial_duration: CONFIG.search_timeout_ms,
+                            response_ends_trial: true,
+                            data: {
+                                trial_kind: "training_search",
+                                block: "training_search",
+                                target_id: TRAINING_TARGET,
+                                correct_gap: function() { return window.currentTrainingGapSide; },
+                                participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
+                            },
+                            on_finish: function(data) {
+                                const correctKey = getCorrectKey(window.currentTrainingGapSide);
+                                if (data.response === null) {
+                                    data.correct = 0;
+                                } else {
+                                    data.correct = (data.response.toLowerCase() === correctKey.toLowerCase()) ? 1 : 0;
+                                }
+                                if (data.correct) {
+                                    window.trainingSearchCorrect++;
+                                }
+                                console.log("Training search correct count:", window.trainingSearchCorrect);
+                            },
+                        },
+                        makeFeedbackTrial(),
+                    ],
+                    loop_function: function() {
+                        return window.trainingSearchCorrect < 5;
+                    }
+                },
+                // Переход к основному блоку поиска
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Тренировка завершена!</h2>
+                        <p>Теперь начинается основное задание. Обратной связи больше не будет.</p>
+                        <p>Готовы приступить к основному блоку?</p>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+                // Основной блок 1
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Блок 1: Поиск</h2>
+                        <p>Запоминайте предметы и ищите их среди остальных объектов.</p>
+                        <div class="small-note">Нажмите любую клавишу.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+            ]
+        });
+
+        // Добавляем пробы основного блока 1
+        const block1Trials = createTrials(STIM_TEMPLATES, CONFIG.repeats_per_item);
+        block1Trials.forEach(({ id, side }) => {
+            jsPsych.addNodeToEndOfTimeline({
+                timeline: [
+                    makeFixationTrial({ block: "stim_templates_search" }),
+                    makeCueTrial(id, false, { block: "stim_templates_search" }),
+                    makeDelayTrial({ block: "stim_templates_search" }),
+                    makeSearchTrial({
+                        targetId: id,
+                        distractorPool: DISTRACTORS_WITHOUT_TRAINING,
+                        setSize: 8,
+                        block: "stim_templates_search",
+                        condition: "stim_templates",
+                        gapSide: side
+                    }),
+                ]
+            });
+        });
+
+        // Тренировка without_search
+        jsPsych.addNodeToEndOfTimeline({
+            timeline: [
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Тренировка: Знакомство</h2>
+                        <p>Сначала посмотрите на предмет, затем вокруг него появится кольцо. Укажите, где разрыв.</p>
+                        <p>Тренировка продлится до 5 правильных ответов.</p>
+                        <div class="small-note">Нажмите любую клавишу.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+                {
+                    timeline: [
+                        makeFixationTrial({ block: "training_familiar" }),
+                        makeStudyTrial(TRAINING_TARGET, { block: "training_familiar" }),
+                        makeDelayTrial({ block: "training_familiar" }),
+                        {
+                            type: jsPsychHtmlKeyboardResponse,
+                            stimulus: function() {
+                                const gapSide = sampleOne(["left", "right"]);
+                                window.currentTrainingFamiliarGapSide = gapSide;
+                                return singleObjectWithRingHTML(objPath(TRAINING_TARGET), gapSide, true);
+                            },
+                            choices: [CONFIG.left_key, CONFIG.right_key],
+                            trial_duration: CONFIG.search_timeout_ms,
+                            response_ends_trial: true,
+                            data: {
+                                trial_kind: "training_familiar",
+                                block: "training_familiar",
+                                target_id: TRAINING_TARGET,
+                                correct_gap: function() { return window.currentTrainingFamiliarGapSide; },
+                                participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
+                            },
+                            on_finish: function(data) {
+                                const correctKey = getCorrectKey(window.currentTrainingFamiliarGapSide);
+                                if (data.response === null) {
+                                    data.correct = 0;
+                                } else {
+                                    data.correct = (data.response.toLowerCase() === correctKey.toLowerCase()) ? 1 : 0;
+                                }
+                                if (data.correct) {
+                                    window.trainingFamiliarCorrect++;
+                                }
+                                console.log("Training familiar correct count:", window.trainingFamiliarCorrect);
+                            },
+                        },
+                        makeFeedbackTrial(),
+                    ],
+                    loop_function: function() {
+                        return window.trainingFamiliarCorrect < 5;
+                    }
+                },
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Тренировка завершена!</h2>
+                        <p>Теперь начинается основное задание. Обратной связи больше не будет.</p>
+                        <p>Готовы приступить к основному блоку?</p>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Блок 2: Знакомство</h2>
+                        <p>Сначала посмотрите на предмет, затем вокруг него появится кольцо. Укажите, где разрыв. Старайтесь не отводить взгляд от предмета!</p>
+                        <div class="small-note">Нажмите любую клавишу.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+            ]
+        });
+
+        // Добавляем пробы основного блока 2
+        const block2Trials = createTrials(WITHOUT_SEARCH, CONFIG.repeats_per_item);
+        block2Trials.forEach(({ id, side }) => {
+            jsPsych.addNodeToEndOfTimeline({
+                timeline: [
+                    makeFixationTrial({ block: "without_search" }),
+                    makeStudyTrial(id, { block: "without_search" }),
+                    makeDelayTrial({ block: "without_search" }),
+                    makeFamiliarTrial({
+                        targetId: id,
+                        block: "without_search",
+                        condition: "without_search",
+                        gapSide: side,
+                        showLabel: false
+                    }),
+                ]
+            });
+        });
+
+        // Фаза поиска (тест)
+        jsPsych.addNodeToEndOfTimeline({
+            timeline: [
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Фаза поиска (Тест)</h2>
+                        <p>Теперь вам вновь необходимо искать предметы. Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
+                        <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+            ]
+        });
+
+        const testPool = [...STIM_TEMPLATES, ...WITHOUT_SEARCH, ...NEW_STIMS];
+        const testTrials = createTrials(testPool, CONFIG.repeats_per_item);
+        testTrials.forEach(({ id, side }) => {
+            let cond = "new_stims";
+            if (STIM_TEMPLATES.includes(id)) cond = "stim_templates";
+            else if (WITHOUT_SEARCH.includes(id)) cond = "without_search";
+
+            const setSize = sampleOne(CONFIG.set_sizes);
+
+            jsPsych.addNodeToEndOfTimeline({
+                timeline: [
+                    makeFixationTrial({ block: "test_search" }),
+                    makeCueTrial(id, false, { block: "test_search", condition: cond }),
+                    makeDelayTrial({ block: "test_search" }),
+                    makeSearchTrial({
+                        targetId: id,
+                        distractorPool: [...DISTRACTORS_WITHOUT_TRAINING, ...NEWEST_STIMS],
+                        setSize: setSize,
+                        block: "test_search",
+                        condition: cond,
+                        gapSide: side
+                    }),
+                ]
+            });
+        });
+
+        // Конец
+        jsPsych.addNodeToEndOfTimeline({
+            timeline: [
+                {
+                    type: jsPsychHtmlKeyboardResponse,
+                    stimulus: `<div class="screen-wrap"><div class="instr">
+                        <h2>Спасибо!</h2>
+                        <p>Эксперимент завершён. Данные отправлены.</p>
+                        <div class="small-note">Нажмите любую клавишу, чтобы увидеть таблицу данных.</div>
+                    </div></div>`,
+                    choices: "ALL_KEYS"
+                },
+            ]
+        });
+    },
+};
+
+/* =========================
+ИНИЦИАЛИЗАЦИЯ СЧЁТЧИКОВ ТРЕНИРОВКИ
+========================= */
+window.trainingSearchCorrect = 0;
+window.trainingFamiliarCorrect = 0;
+
+/* =========================
 СТАРТОВЫЙ ЭКРАН С ПОЛНЫМ ЭКРАНОМ
 ========================= */
 function startExperiment() {
@@ -679,9 +681,6 @@ document.addEventListener('keydown', function(e) {
 });
 
 /* =========================
-TIMELINE
+TIMELINE (изначально только idTrial)
 ========================= */
 const timeline = [idTrial];
-
-// jsPsych.run() вызывается после нажатия кнопки fullscreen
-// timeline будет заполнен внутри on_finish idTrial
