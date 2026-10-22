@@ -7,13 +7,13 @@ function getAdaptiveSizes() {
     const h = window.innerHeight;
     const minDim = Math.min(w, h);
 
-    // Радиус окружности = 40% от меньшей стороны экрана (было 35%), но не более 420px (было 360)
+    // Радиус окружности = 40% от меньшей стороны экрана, но не более 420px
     const circle_radius = Math.min(minDim * 0.40, 420);
 
-    // Размер кольца = 18% от меньшей стороны (было 14%), но не более 240px (было 180)
+    // Размер кольца = 18% от меньшей стороны, но не более 240px
     const ring_px = Math.min(minDim * 0.18, 240);
 
-    // Размер объекта = 75% от кольца (было 70%)
+    // Размер объекта = 75% от кольца
     const stim_px = Math.round(ring_px * 0.75);
 
     // Размер арены = чуть больше диаметра окружности + запас
@@ -39,7 +39,6 @@ const CONFIG = {
     search_timeout_ms: 5000,
     feedback_ms: 700,
 
-    // Размеры теперь берутся из ADAPTIVE
     stim_px: ADAPTIVE.stim_px,
     ring_px: ADAPTIVE.ring_px,
     circle_radius: ADAPTIVE.circle_radius,
@@ -371,6 +370,43 @@ function makeFamiliarTrial({ targetId, block, condition, gapSide }) {
 }
 
 /* =========================
+СТАРТОВЫЙ ЭКРАН С ПОЛНЫМ ЭКРАНОМ
+========================= */
+function startExperiment() {
+    document.getElementById('fullscreen-start').style.display = 'none';
+    jsPsych.run(timeline);
+}
+
+function enterFullscreen() {
+    const el = document.documentElement;
+    const requestFullscreen = el.requestFullscreen 
+        || el.webkitRequestFullscreen 
+        || el.msRequestFullscreen;
+    
+    if (requestFullscreen) {
+        requestFullscreen.call(el).then(() => {
+            startExperiment();
+        }).catch((err) => {
+            console.warn("Fullscreen request failed:", err);
+            startExperiment();
+        });
+    } else {
+        startExperiment();
+    }
+}
+
+document.getElementById('start-fullscreen-btn').addEventListener('click', enterFullscreen);
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+        const startScreen = document.getElementById('fullscreen-start');
+        if (startScreen && startScreen.style.display !== 'none') {
+            enterFullscreen();
+        }
+    }
+});
+
+/* =========================
 TIMELINE
 ========================= */
 const timeline = [];
@@ -488,5 +524,3 @@ timeline.push({
     </div></div>`,
     choices: "ALL_KEYS"
 });
-
-jsPsych.run(timeline);
