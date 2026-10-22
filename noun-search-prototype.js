@@ -23,9 +23,10 @@ const CONFIG = {
     left_key: "ArrowLeft",
     right_key: "ArrowRight",
 
+    blank_ms: 300,
+    cue_ms: 700,
     fixation_ms: 500,
-    cue_ms: 900,
-    delay_ms: 500,
+    blank_after_fixation_ms: 300,
     study_ms: 3000,
     search_timeout_ms: 5000,
     feedback_ms: 700,
@@ -67,7 +68,7 @@ const ALL_OBJECT_IDS = [
 function objPath(id) { return `${CONFIG.paths.objects}${id}-600.jpg`; }
 
 /* =========================
-ИНИЦИАЛИЗАЦИЯ JSPSYCH
+ИНИЦИАЛИЗАЦИЯ JSPSYCH С DATAPIPE
 ========================= */
 const jsPsych = initJsPsych({
     display_element: "jspsych-target",
@@ -85,7 +86,7 @@ const jsPsych = initJsPsych({
 });
 
 /* =========================
-HELPERS (определены ДО idTrial, т.к. используются внутри)
+HELPERS (определены ДО idTrial)
 ========================= */
 function sampleOne(arr) { return jsPsych.randomization.sampleWithoutReplacement(arr, 1)[0]; }
 function shuffle(arr) { return jsPsych.randomization.shuffle(arr); }
@@ -113,6 +114,9 @@ function createTrials(items, repeats) {
     return jsPsych.randomization.shuffle(trials);
 }
 
+/* =========================
+POSITION GENERATION (СТРОГО ПО ОКРУЖНОСТИ)
+========================= */
 function generateSearchPositions({ nItems }) {
     const cx = CONFIG.arena_size / 2;
     const cy = CONFIG.arena_size / 2;
@@ -139,6 +143,10 @@ function generateSearchPositions({ nItems }) {
 /* =========================
 HTML BUILDERS
 ========================= */
+function blankHTML() {
+    return `<div class="screen-wrap"></div>`;
+}
+
 function fixationHTML() {
     return `<div class="screen-wrap"><div class="fixation">+</div></div>`;
 }
@@ -202,6 +210,16 @@ function searchArrayHTML({ targetId, distractorIds, gapSideTarget, setSize }) {
 /* =========================
 TRIAL FACTORIES
 ========================= */
+function makeBlankTrial(duration, extraData = {}) {
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: blankHTML(),
+        choices: "NO_KEYS",
+        trial_duration: duration,
+        data: { screen: "blank", participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1, ...extraData },
+    };
+}
+
 function makeFixationTrial(extraData = {}) {
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -227,7 +245,7 @@ function makeDelayTrial(extraData = {}) {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: fixationHTML(),
         choices: "NO_KEYS",
-        trial_duration: CONFIG.delay_ms,
+        trial_duration: CONFIG.fixation_ms,
         data: { screen: "delay", participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1, ...extraData },
     };
 }
@@ -332,12 +350,14 @@ const idTrial = {
             return;
         }
         const seed = parseInt(match[0]);
-        
+
         // ВАЖНО: устанавливаем seed ДО перемешивания!
         jsPsych.randomization.setSeed(seed);
 
         window.PARTICIPANT_ID = rawId;
         window.SEED = seed;
+        window.trainingSearchCorrect = 0;
+        window.trainingFamiliarCorrect = 0;
 
         jsPsych.data.addProperties({
             subject_id: rawId
@@ -399,9 +419,10 @@ const idTrial = {
                 },
                 {
                     timeline: [
-                        makeFixationTrial({ block: "training_search" }),
+                        makeBlankTrial(CONFIG.blank_ms, { block: "training_search" }),
                         makeCueTrial(TRAINING_TARGET, true, { block: "training_search" }),
-                        makeDelayTrial({ block: "training_search" }),
+                        makeFixationTrial({ block: "training_search" }),
+                        makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "training_search" }),
                         {
                             type: jsPsychHtmlKeyboardResponse,
                             stimulus: function() {
@@ -468,9 +489,10 @@ const idTrial = {
         block1Trials.forEach(({ id, side }) => {
             jsPsych.addNodeToEndOfTimeline({
                 timeline: [
-                    makeFixationTrial({ block: "stim_templates_search" }),
+                    makeBlankTrial(CONFIG.blank_ms, { block: "stim_templates_search" }),
                     makeCueTrial(id, false, { block: "stim_templates_search" }),
-                    makeDelayTrial({ block: "stim_templates_search" }),
+                    makeFixationTrial({ block: "stim_templates_search" }),
+                    makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "stim_templates_search" }),
                     makeSearchTrial({
                         targetId: id,
                         distractorPool: DISTRACTORS_WITHOUT_TRAINING,
@@ -498,9 +520,10 @@ const idTrial = {
                 },
                 {
                     timeline: [
-                        makeFixationTrial({ block: "training_familiar" }),
+                        makeBlankTrial(CONFIG.blank_ms, { block: "training_familiar" }),
                         makeStudyTrial(TRAINING_TARGET, { block: "training_familiar" }),
-                        makeDelayTrial({ block: "training_familiar" }),
+                        makeFixationTrial({ block: "training_familiar" }),
+                        makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "training_familiar" }),
                         {
                             type: jsPsychHtmlKeyboardResponse,
                             stimulus: function() {
@@ -564,9 +587,10 @@ const idTrial = {
         block2Trials.forEach(({ id, side }) => {
             jsPsych.addNodeToEndOfTimeline({
                 timeline: [
-                    makeFixationTrial({ block: "without_search" }),
+                    makeBlankTrial(CONFIG.blank_ms, { block: "without_search" }),
                     makeStudyTrial(id, { block: "without_search" }),
-                    makeDelayTrial({ block: "without_search" }),
+                    makeFixationTrial({ block: "without_search" }),
+                    makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "without_search" }),
                     makeFamiliarTrial({
                         targetId: id,
                         block: "without_search",
@@ -605,9 +629,10 @@ const idTrial = {
 
             jsPsych.addNodeToEndOfTimeline({
                 timeline: [
-                    makeFixationTrial({ block: "test_search" }),
+                    makeBlankTrial(CONFIG.blank_ms, { block: "test_search" }),
                     makeCueTrial(id, false, { block: "test_search", condition: cond }),
-                    makeDelayTrial({ block: "test_search" }),
+                    makeFixationTrial({ block: "test_search" }),
+                    makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "test_search" }),
                     makeSearchTrial({
                         targetId: id,
                         distractorPool: [...DISTRACTORS_WITHOUT_TRAINING, ...NEWEST_STIMS],
@@ -636,12 +661,6 @@ const idTrial = {
         });
     },
 };
-
-/* =========================
-ИНИЦИАЛИЗАЦИЯ СЧЁТЧИКОВ ТРЕНИРОВКИ
-========================= */
-window.trainingSearchCorrect = 0;
-window.trainingFamiliarCorrect = 0;
 
 /* =========================
 СТАРТОВЫЙ ЭКРАН С ПОЛНЫМ ЭКРАНОМ
