@@ -7,14 +7,14 @@ function getAdaptiveSizes() {
     const h = window.innerHeight;
     const minDim = Math.min(w, h);
 
-    // Радиус окружности = 35% от меньшей стороны экрана, но не более 360px
-    const circle_radius = Math.min(minDim * 0.35, 360);
+    // Радиус окружности = 40% от меньшей стороны экрана (было 35%), но не более 420px (было 360)
+    const circle_radius = Math.min(minDim * 0.40, 420);
 
-    // Размер кольца = 14% от меньшей стороны, но не более 180px
-    const ring_px = Math.min(minDim * 0.14, 180);
+    // Размер кольца = 18% от меньшей стороны (было 14%), но не более 240px (было 180)
+    const ring_px = Math.min(minDim * 0.18, 240);
 
-    // Размер объекта = 70% от кольца
-    const stim_px = Math.round(ring_px * 0.7);
+    // Размер объекта = 75% от кольца (было 70%)
+    const stim_px = Math.round(ring_px * 0.75);
 
     // Размер арены = чуть больше диаметра окружности + запас
     const arena_size = Math.round(circle_radius * 2 + ring_px + 100);
