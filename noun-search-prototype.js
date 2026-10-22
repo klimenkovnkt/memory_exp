@@ -82,30 +82,9 @@ const idTrial = {
             <h2>Введите ID, который вам сообщил экспериментатор</h2>
             <input type="text" name="participant_id" required placeholder="id_1"
                    style="font-size:24px; padding:10px 20px; border:2px solid #333; border-radius:8px; text-align:center; width:300px;">
-            <button id="custom-start-btn" type="button"
-                    style="font-size:20px; padding:10px 30px; background:#333; color:white; border:none; border-radius:8px; cursor:pointer;">
-                Начать
-            </button>
         </div>
     `,
-    button_label: "",
-    on_load: function() {
-        const btn = document.getElementById('custom-start-btn');
-        if (btn) {
-            btn.addEventListener('click', function() {
-                // Находим форму и её стандартную кнопку submit
-                const form = document.querySelector('.jspsych-survey-html-form');
-                if (form) {
-                    const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
-                    if (submitBtn) {
-                        submitBtn.click();
-                    } else {
-                        form.submit();
-                    }
-                }
-            });
-        }
-    },
+    button_label: "Начать",
     on_finish: function (data) {
         const rawId = data.response.participant_id;
         const match = rawId.match(/\d+/);
@@ -147,21 +126,23 @@ const NEW_STIMS = shuffledIds.slice(idx, idx += CONFIG.new_stims_count);
 const NEWEST_STIMS = shuffledIds.slice(idx, idx += CONFIG.newest_stims_count);
 const DISTRACTORS = shuffledIds.slice(idx);
 
-// Выбираем тренировочный объект из дистракторов и удаляем его из пула
-const TRAINING_TARGET = DISTRACTORS.splice(0, 1)[0];
+// TRAINING_TARGET: берём первый элемент из DISTRACTORS (индекс 0), НЕ через splice
+const TRAINING_TARGET = DISTRACTORS[0];
+// Остальные дистракторы (без TRAINING_TARGET)
+const DISTRACTORS_WITHOUT_TRAINING = DISTRACTORS.slice(1);
 
 console.log("TRAINING_TARGET:", TRAINING_TARGET);
 console.log("STIM_TEMPLATES:", STIM_TEMPLATES);
 console.log("WITHOUT_SEARCH:", WITHOUT_SEARCH);
 console.log("NEW_STIMS:", NEW_STIMS);
 console.log("NEWEST_STIMS:", NEWEST_STIMS);
-console.log("DISTRACTORS (без training):", DISTRACTORS);
+console.log("DISTRACTORS_WITHOUT_TRAINING:", DISTRACTORS_WITHOUT_TRAINING);
 
 const PRELOAD_IMAGES = [
     CONFIG.paths.ring_left, CONFIG.paths.ring_right,
     ...STIM_TEMPLATES.map(objPath), ...WITHOUT_SEARCH.map(objPath),
     ...NEW_STIMS.map(objPath), ...NEWEST_STIMS.map(objPath),
-    ...DISTRACTORS.map(objPath),
+    ...DISTRACTORS_WITHOUT_TRAINING.map(objPath),
     objPath(TRAINING_TARGET)
 ];
 
@@ -470,7 +451,7 @@ const trainingSearchTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const gapSide = sampleOne(["left", "right"]);
-        const distractorIds = pickDistractors(TRAINING_TARGET, DISTRACTORS, 7);
+        const distractorIds = pickDistractors(TRAINING_TARGET, DISTRACTORS_WITHOUT_TRAINING, 7);
         window.currentTrainingGapSide = gapSide;
         return searchArrayHTML({ targetId: TRAINING_TARGET, distractorIds, gapSideTarget: gapSide, setSize: 8 });
     },
@@ -507,7 +488,9 @@ const trainingSearchLoop = {
         makeFeedbackTrial(),
     ],
     loop_function: function() {
-        return window.trainingSearchCorrect < 5;
+        const shouldContinue = window.trainingSearchCorrect < 5;
+        console.log("Loop check: trainingSearchCorrect =", window.trainingSearchCorrect, "shouldContinue =", shouldContinue);
+        return shouldContinue;
     }
 };
 
@@ -543,7 +526,7 @@ block1Trials.forEach(({ id, side }) => {
     timeline.push(makeDelayTrial({ block: "stim_templates_search" }));
     timeline.push(makeSearchTrial({
         targetId: id,
-        distractorPool: DISTRACTORS,
+        distractorPool: DISTRACTORS_WITHOUT_TRAINING,
         setSize: 8,
         block: "stim_templates_search",
         condition: "stim_templates",
@@ -605,7 +588,9 @@ const trainingFamiliarLoop = {
         makeFeedbackTrial(),
     ],
     loop_function: function() {
-        return window.trainingFamiliarCorrect < 5;
+        const shouldContinue = window.trainingFamiliarCorrect < 5;
+        console.log("Loop check: trainingFamiliarCorrect =", window.trainingFamiliarCorrect, "shouldContinue =", shouldContinue);
+        return shouldContinue;
     }
 };
 
@@ -674,7 +659,7 @@ testTrials.forEach(({ id, side }) => {
     timeline.push(makeDelayTrial({ block: "test_search" }));
     timeline.push(makeSearchTrial({
         targetId: id,
-        distractorPool: [...DISTRACTORS, ...NEWEST_STIMS],
+        distractorPool: [...DISTRACTORS_WITHOUT_TRAINING, ...NEWEST_STIMS],
         setSize: setSize,
         block: "test_search",
         condition: cond,
