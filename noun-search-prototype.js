@@ -88,15 +88,20 @@ const idTrial = {
             </button>
         </div>
     `,
-    button_label: "",  // Скрываем стандартную кнопку
+    button_label: "",
     on_load: function() {
-        // Этот callback вызывается ПОСЛЕ рендера формы — кнопка точно есть в DOM
         const btn = document.getElementById('custom-start-btn');
         if (btn) {
             btn.addEventListener('click', function() {
+                // Находим форму и её стандартную кнопку submit
                 const form = document.querySelector('.jspsych-survey-html-form');
                 if (form) {
-                    form.requestSubmit();
+                    const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.click();
+                    } else {
+                        form.submit();
+                    }
                 }
             });
         }
