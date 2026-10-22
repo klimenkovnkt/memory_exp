@@ -122,6 +122,37 @@
     </style>
 </head>
 <body>
+    <!-- Стартовый экран для перехода в полный экран -->
+    <div id="fullscreen-start" style="
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
+        background-color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    ">
+        <h1 style="font-size: 32px; margin-bottom: 20px; color: #000;">Эксперимент</h1>
+        <p style="font-size: 20px; color: #333; margin-bottom: 30px; text-align: center; max-width: 600px;">
+            Для корректной работы эксперимента рекомендуется полный экран.
+        </p>
+        <button id="start-fullscreen-btn" style="
+            font-size: 22px;
+            padding: 15px 40px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        ">
+            Начать в полном экране
+        </button>
+        <p style="font-size: 14px; color: #888; margin-top: 20px;">
+            Или нажмите <strong>F11</strong> для полного экрана вручную
+        </p>
+    </div>
+
     <div id="jspsych-target"></div>
     <script src="noun-search-prototype.js"></script>
 </body>
