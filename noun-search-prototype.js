@@ -6,10 +6,11 @@ function getAdaptiveSizes() {
     const h = window.innerHeight;
     const minDim = Math.min(w, h);
 
-    const circle_radius = Math.min(minDim * 0.40, 420);
-    const ring_px = Math.min(minDim * 0.18, 240);
+    // УВЕЛИЧЕННЫЙ радиус для всех set_size (было 0.40/420, стало 0.45/500)
+    const circle_radius = Math.min(minDim * 0.45, 500);
+    const ring_px = Math.min(minDim * 0.16, 200);
     const stim_px = Math.round(ring_px * 0.75);
-    const arena_size = Math.round(circle_radius * 2 + ring_px + 100);
+    const arena_size = Math.round(circle_radius * 2 + ring_px + 200);
 
     return { circle_radius, ring_px, stim_px, arena_size };
 }
@@ -36,8 +37,6 @@ const CONFIG = {
     ring_px: ADAPTIVE.ring_px,
     circle_radius: ADAPTIVE.circle_radius,
     arena_size: ADAPTIVE.arena_size,
-
-    circle_start_angle: -3 * Math.PI / 4,
 
     stim_templates_count: 8,
     without_search_count: 8,
@@ -105,42 +104,23 @@ function getKeyName(code) {
 }
 
 /* =========================
-POSITION GENERATION (СТРОГО ПО ОКРУЖНОСТИ)
+POSITION GENERATION (СТРОГО СИММЕТРИЧНО ПО КВАДРАНТАМ)
 ========================= */
-function generateSearchPositions({ nItems, targetSide = null }) {
+function generateSearchPositions({ nItems }) {
     const cx = CONFIG.arena_size / 2;
     const cy = CONFIG.arena_size / 2;
     const radius = CONFIG.circle_radius;
     const angleStep = (Math.PI * 2) / nItems;
 
-    let rotationOffset;
-    if (nItems === 4) {
-        rotationOffset = 0;
-    } else {
-        rotationOffset = Math.random() * angleStep;
-    }
+    // Начальный угол делит первый квадрант пополам для симметрии
+    const startAngle = Math.PI / (2 * nItems);
 
     let positions = [];
     for (let i = 0; i < nItems; i++) {
-        const angle = CONFIG.circle_start_angle + rotationOffset + (angleStep * i);
+        const angle = -Math.PI / 2 + startAngle + (angleStep * i);
         const x = cx + Math.cos(angle) * radius;
         const y = cy + Math.sin(angle) * radius;
         positions.push({ x, y });
-    }
-
-    if (targetSide !== null) {
-        const leftPositions = positions.filter(p => p.x < cx);
-        const rightPositions = positions.filter(p => p.x >= cx);
-        
-        if (targetSide === "left" && leftPositions.length > 0) {
-            const targetPos = sampleOne(leftPositions);
-            const otherPositions = positions.filter(p => p !== targetPos);
-            positions = [targetPos, ...shuffle(otherPositions)];
-        } else if (targetSide === "right" && rightPositions.length > 0) {
-            const targetPos = sampleOne(rightPositions);
-            const otherPositions = positions.filter(p => p !== targetPos);
-            positions = [targetPos, ...shuffle(otherPositions)];
-        }
     }
 
     return positions;
@@ -191,29 +171,24 @@ function singleObjectWithRingHTML(targetPath, gapSide, showLabel = true) {
     }
 }
 
-function searchArrayHTML({ targetId, distractorIds, gapSideTarget, setSize, targetSide }) {
-    const distractorShuffle = shuffle(distractorIds);
-    const positions = generateSearchPositions({ nItems: setSize, targetSide });
+function searchArrayHTML({ targetId, distractorIds, gapSideTarget, setSize }) {
+    const ids = shuffle([targetId, ...distractorIds]);
+    const positions = generateSearchPositions({ nItems: setSize });
     let html = `<div class="arena-wrap"><div class="arena" style="width:${CONFIG.arena_size}px; height:${CONFIG.arena_size}px;">`;
-    
-    const targetPos = positions[0];
-    html += `
-      <div class="stim-container" style="left:${targetPos.x}px; top:${targetPos.y}px; width:${CONFIG.ring_px}px; height:${CONFIG.ring_px}px; transform: translate(-50%, -50%);">
-        <img class="stim-obj" src="${objPath(targetId)}" style="width:${CONFIG.stim_px}px; height:${CONFIG.stim_px}px;">
-        <img class="stim-ring" src="${getRingPath(gapSideTarget)}" style="width:100%; height:100%;">
-      </div>
-    `;
+    const targetIndex = ids.indexOf(targetId);
 
-    for (let i = 1; i < setSize; i++) {
-        const pos = positions[i];
-        const ringSide = sampleOne(["left", "right"]);
+    ids.forEach((id, idx) => {
+        const pos = positions[idx];
+        const isTarget = idx === targetIndex;
+        const ringSide = isTarget ? gapSideTarget : sampleOne(["left", "right"]);
+
         html += `
           <div class="stim-container" style="left:${pos.x}px; top:${pos.y}px; width:${CONFIG.ring_px}px; height:${CONFIG.ring_px}px; transform: translate(-50%, -50%);">
-            <img class="stim-obj" src="${objPath(distractorShuffle[i-1])}" style="width:${CONFIG.stim_px}px; height:${CONFIG.stim_px}px;">
+            <img class="stim-obj" src="${objPath(id)}" style="width:${CONFIG.stim_px}px; height:${CONFIG.stim_px}px;">
             <img class="stim-ring" src="${getRingPath(ringSide)}" style="width:100%; height:100%;">
           </div>
         `;
-    }
+    });
     html += `</div></div>`;
     return html;
 }
@@ -275,13 +250,13 @@ function makeFeedbackTrial() {
     };
 }
 
-function makeSearchTrial({ targetId, distractorPool, setSize, block, condition, gapSide, targetSide }) {
+function makeSearchTrial({ targetId, distractorPool, setSize, block, condition, gapSide }) {
     const distractorIds = pickDistractors(targetId, distractorPool, setSize - 1);
     const correctKey = getCorrectKey(gapSide);
 
     return {
         type: jsPsychHtmlKeyboardResponse,
-        stimulus: searchArrayHTML({ targetId, distractorIds, gapSideTarget: gapSide, setSize, targetSide }),
+        stimulus: searchArrayHTML({ targetId, distractorIds, gapSideTarget: gapSide, setSize }),
         choices: [CONFIG.left_key, CONFIG.right_key],
         trial_duration: CONFIG.search_timeout_ms,
         response_ends_trial: true,
@@ -289,7 +264,6 @@ function makeSearchTrial({ targetId, distractorPool, setSize, block, condition, 
             trial_kind: "search", block, condition,
             target_id: targetId, distractor_ids: distractorIds.join("|"),
             set_size: setSize, correct_gap: gapSide, correct_key: correctKey,
-            target_side: targetSide,
             participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
         },
         on_finish: function (data) {
@@ -530,8 +504,7 @@ const idTrial = {
                                         targetId, 
                                         distractorIds, 
                                         gapSideTarget: cond.gapSide, 
-                                        setSize: 8,
-                                        targetSide: cond.targetSide
+                                        setSize: 8
                                     });
                                 },
                                 choices: [CONFIG.left_key, CONFIG.right_key],
@@ -543,7 +516,6 @@ const idTrial = {
                                     condition: "stim_templates",
                                     target_id: targetId,
                                     correct_gap: function() { return window.currentBlock1Cond.gapSide; },
-                                    target_side: function() { return window.currentBlock1Cond.targetSide; },
                                     participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
                                 },
                                 on_finish: function(data) {
@@ -700,7 +672,7 @@ const idTrial = {
             });
         });
 
-        // === ФАЗА ПОИСКА (ТЕСТ) — ПОЛНАЯ РАНДОМИЗАЦИЯ ===
+        // === ФАЗА ПОИСКА (ТЕСТ) ===
         jsPsych.addNodeToEndOfTimeline({
             timeline: [
                 {
@@ -716,11 +688,9 @@ const idTrial = {
             ]
         });
 
-        // Создаём пул стимулов для теста и перемешиваем
         const testPool = [...STIM_TEMPLATES, ...WITHOUT_SEARCH, ...NEW_STIMS];
         const shuffledTestPool = shuffle(testPool);
 
-        // Создаём пробы с полной рандомизацией
         shuffledTestPool.forEach((id) => {
             let cond = "new_stims";
             if (STIM_TEMPLATES.includes(id)) cond = "stim_templates";
