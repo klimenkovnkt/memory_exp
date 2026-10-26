@@ -128,7 +128,6 @@ function generateSearchPositions({ nItems, targetSide = null }) {
         positions.push({ x, y });
     }
 
-    // Если нужно разместить цель в определённой половине, меняем порядок
     if (targetSide !== null) {
         const leftPositions = positions.filter(p => p.x < cx);
         const rightPositions = positions.filter(p => p.x >= cx);
@@ -195,10 +194,8 @@ function singleObjectWithRingHTML(targetPath, gapSide, showLabel = true) {
 function searchArrayHTML({ targetId, distractorIds, gapSideTarget, setSize, targetSide }) {
     const distractorShuffle = shuffle(distractorIds);
     const positions = generateSearchPositions({ nItems: setSize, targetSide });
-    // УБРАН крестик из HTML
     let html = `<div class="arena-wrap"><div class="arena" style="width:${CONFIG.arena_size}px; height:${CONFIG.arena_size}px;">`;
     
-    // Первый стимул — целевой (позиция уже выбрана)
     const targetPos = positions[0];
     html += `
       <div class="stim-container" style="left:${targetPos.x}px; top:${targetPos.y}px; width:${CONFIG.ring_px}px; height:${CONFIG.ring_px}px; transform: translate(-50%, -50%);">
@@ -207,7 +204,6 @@ function searchArrayHTML({ targetId, distractorIds, gapSideTarget, setSize, targ
       </div>
     `;
 
-    // Остальные — дистракторы
     for (let i = 1; i < setSize; i++) {
         const pos = positions[i];
         const ringSide = sampleOne(["left", "right"]);
@@ -336,16 +332,13 @@ function makeFamiliarTrial({ targetId, block, condition, gapSide, showLabel }) {
 
 /* =========================
 ГЕНЕРАЦИЯ УСЛОВИЙ ДЛЯ БЛОКА 1
-8 условий на стимул: 4 слева (2 gap left, 2 gap right) + 4 справа (2 gap left, 2 gap right)
 ========================= */
 function generateBlock1Conditions() {
     const conditions = [];
-    // 4 слева
     for (let i = 0; i < 2; i++) {
         conditions.push({ targetSide: "left", gapSide: "left" });
         conditions.push({ targetSide: "left", gapSide: "right" });
     }
-    // 4 справа
     for (let i = 0; i < 2; i++) {
         conditions.push({ targetSide: "right", gapSide: "left" });
         conditions.push({ targetSide: "right", gapSide: "right" });
@@ -355,7 +348,6 @@ function generateBlock1Conditions() {
 
 /* =========================
 ГЕНЕРАЦИЯ УСЛОВИЙ ДЛЯ БЛОКА 2
-8 условий на стимул: 4 gap left + 4 gap right
 ========================= */
 function generateBlock2Conditions() {
     const conditions = [];
@@ -515,7 +507,6 @@ const idTrial = {
         });
 
         // === БЛОК 1: stim_templates_search ===
-        // Для каждого стимула: 8 условий, показывать до 8 правильных
         STIM_TEMPLATES.forEach((targetId) => {
             const conditions = generateBlock1Conditions();
             let correctCount = 0;
@@ -709,7 +700,7 @@ const idTrial = {
             });
         });
 
-        // === ФАЗА ПОИСКА (ТЕСТ) — БЕЗ ИЗМЕНЕНИЙ ===
+        // === ФАЗА ПОИСКА (ТЕСТ) — ПОЛНАЯ РАНДОМИЗАЦИЯ ===
         jsPsych.addNodeToEndOfTimeline({
             timeline: [
                 {
@@ -725,8 +716,12 @@ const idTrial = {
             ]
         });
 
+        // Создаём пул стимулов для теста и перемешиваем
         const testPool = [...STIM_TEMPLATES, ...WITHOUT_SEARCH, ...NEW_STIMS];
-        testPool.forEach((id) => {
+        const shuffledTestPool = shuffle(testPool);
+
+        // Создаём пробы с полной рандомизацией
+        shuffledTestPool.forEach((id) => {
             let cond = "new_stims";
             if (STIM_TEMPLATES.includes(id)) cond = "stim_templates";
             else if (WITHOUT_SEARCH.includes(id)) cond = "without_search";
@@ -807,6 +802,6 @@ document.addEventListener('keydown', function(e) {
 });
 
 /* =========================
-TIMELINE
+TIMELINE (изначально только idTrial)
 ========================= */
 const timeline = [idTrial];
