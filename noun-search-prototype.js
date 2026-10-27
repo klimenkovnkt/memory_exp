@@ -108,28 +108,29 @@ POSITION GENERATION (СТРОГО СИММЕТРИЧНО ПО КВАДРАНТА
 ========================= */
 /* =========================
 POSITION GENERATION (СТРОГО СИММЕТРИЧНО ПО КВАДРАНТАМ)
+/* =========================
+POSITION GENERATION (ОТ 3 ЧАСОВ, ПРОТИВ ЧАСОВОЙ СТРЕЛКИ)
 ========================= */
 function generateSearchPositions({ nItems }) {
     const cx = CONFIG.arena_size / 2;
     const cy = CONFIG.arena_size / 2;
     const radius = CONFIG.circle_radius;
     
-    // Угол между стимулами (равные расстояния)
+    // Начальный угол: π/nItems (45° для 4, 22.5° для 8, 15° для 12)
+    const startAngle = Math.PI / nItems;
+    
+    // Шаг между стимулами: 2π/nItems (90° для 4, 45° для 8, 30° для 12)
     const angleStep = (Math.PI * 2) / nItems;
-    
-    // Начальный угол делит первый квадрант пополам для симметрии
-    // 4 стимула: 45°, 8 стимулов: 22.5°, 12 стимулов: 15°
-    const startAngle = Math.PI / (2 * nItems);
-    
+
     let positions = [];
     for (let i = 0; i < nItems; i++) {
-        // Начинаем сверху (-π/2) и добавляем начальный угол
-        const angle = -Math.PI / 2 + startAngle + (angleStep * i);
+        // Угол отсчитывается от 3 часов (0°) против часовой стрелки
+        const angle = startAngle + (angleStep * i);
         const x = cx + Math.cos(angle) * radius;
         const y = cy + Math.sin(angle) * radius;
         positions.push({ x, y });
     }
-    
+
     return positions;
 }
 
