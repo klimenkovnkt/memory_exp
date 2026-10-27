@@ -106,24 +106,35 @@ function getKeyName(code) {
 /* =========================
 POSITION GENERATION (СТРОГО СИММЕТРИЧНО ПО КВАДРАНТАМ)
 ========================= */
-function generateSearchPositions({ nItems }) {
-    const cx = CONFIG.arena_size / 2;
-    const cy = CONFIG.arena_size / 2;
-    const radius = CONFIG.circle_radius;
-    const angleStep = (Math.PI * 2) / nItems;
-
-    // Начальный угол делит первый квадрант пополам для симметрии
-    const startAngle = Math.PI / (2 * nItems);
-
-    let positions = [];
-    for (let i = 0; i < nItems; i++) {
-        const angle = -Math.PI / 2 + startAngle + (angleStep * i);
-        const x = cx + Math.cos(angle) * radius;
-        const y = cy + Math.sin(angle) * radius;
-        positions.push({ x, y });
-    }
-
-    return positions;
+function generateSearchPositions({
+  nItems,
+  arenaW = 1280,
+  arenaH = 860,
+  centerExclusion = 140,
+  minDist = 250,
+}) {
+  const cx = arenaW / 2;
+  const cy = arenaH / 2;
+  
+  // Радиусы эллипса для размещения
+  const rx = 360; // горизонтальный радиус
+  const ry = 240; // вертикальный радиус
+  
+  const positions = [];
+  
+  // Располагаем объекты равномерно по эллипсу
+  for (let i = 0; i < nItems; i++) {
+    // Угол для каждого объекта (равномерное распределение по кругу)
+    const angle = (Math.PI * 2 * i) / nItems;
+    
+    // Позиция на эллипсе
+    const x = cx + Math.cos(angle) * rx;
+    const y = cy + Math.sin(angle) * ry;
+    
+    positions.push({ x, y });
+  }
+  
+  return positions;
 }
 
 /* =========================
