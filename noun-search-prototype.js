@@ -471,7 +471,7 @@ const idTrial = {
                                 window.currentTrainingProbe = probeId;
                                 return `<div class="screen-wrap">
                                             <div class="cue-wrap">
-                                                <div class="cue-label" style="font-size: 24px;">Тот же (→) или другой (←)?</div>
+                                                <div class="cue-label" style="font-size: 24px;">другой (←) или тот же (→)?</div>
                                                 ${singleObjectWithFullRingHTML(objPath(probeId)).replace('<div class="screen-wrap">', '').replace('</div>', '')}
                                             </div>
                                         </div>`;
