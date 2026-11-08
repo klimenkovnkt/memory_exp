@@ -42,9 +42,9 @@ const CONFIG = {
     new_stims_count: 8,
     newest_stims_count: 8,
 
-    test_blocks_count: 8,
+    test_blocks_count: 2,
 
-    set_sizes: [4, 8, 12],
+    set_sizes: [8],
 
     paths: {
         objects: "./NOUN-2-600DPI/",
