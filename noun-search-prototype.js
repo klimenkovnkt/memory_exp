@@ -42,7 +42,7 @@ const CONFIG = {
     new_stims_count: 8,
     newest_stims_count: 8,
 
-    test_blocks_count: 2,  // Количество повторений тестового блока (для теста поставь 2)
+    test_blocks_count: 8,
 
     set_sizes: [4, 8, 12],
 
@@ -103,7 +103,7 @@ function getKeyName(code) {
 }
 
 /* =========================
-POSITION GENERATION (СТРОГО СИММЕТРИЧНО ПО КВАДРАНТАМ)
+POSITION GENERATION
 ========================= */
 function generateSearchPositions({ nItems }) {
     const cx = CONFIG.arena_size / 2;
@@ -211,47 +211,44 @@ function makeSearchTrial({ targetId, distractorPool, setSize, block, condition, 
     };
 }
 
-// ИСПРАВЛЕНО: для блока without_search правильный ответ зависит от is_same, а не от gapSide
-function makeFamiliarTrial({ targetId, block, condition, isSame, showLabel }) {
-    // Для same/different: вправо = тот же, влево = другой
+function makeFamiliarTrial({ targetId, block, condition, isSame }) {
     const correctKey = isSame ? CONFIG.right_key.toLowerCase() : CONFIG.left_key.toLowerCase();
-
     return {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: singleObjectWithFullRingHTML(objPath(targetId)),
         choices: [CONFIG.left_key, CONFIG.right_key],
         trial_duration: CONFIG.familiar_timeout_ms,
         response_ends_trial: true,
-        data: {
-            trial_kind: "familiar_single", block, condition,
-            target_id: targetId, is_same: isSame, correct_key: correctKey,
-            participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1,
-        },
+        data: { trial_kind: "familiar_single", block, condition, target_id: targetId, is_same: isSame, correct_key: correctKey, participant_id: window.PARTICIPANT_ID, seed: window.SEED, part: 1 },
         on_finish: function (data) {
-            if (data.response === null) {
-                data.correct = 0;
-                data.timeout = 1;
-            } else {
-                data.correct = (data.response.toLowerCase() === correctKey.toLowerCase()) ? 1 : 0;
-                data.timeout = 0;
-            }
+            if (data.response === null) { data.correct = 0; data.timeout = 1; }
+            else { data.correct = (data.response.toLowerCase() === correctKey.toLowerCase()) ? 1 : 0; data.timeout = 0; }
         },
     };
 }
 
 /* =========================
-ГЕНЕРАЦИЯ УСЛОВИЙ ДЛЯ БЛОКА 2 (SAME/DIFFERENT)
+ГЕНЕРАЦИЯ УСЛОВИЙ
 ========================= */
+function generateBlock1Conditions() {
+    const conditions = [];
+    for (let i = 0; i < 2; i++) {
+        conditions.push({ targetSide: "left", gapSide: "left" });
+        conditions.push({ targetSide: "left", gapSide: "right" });
+    }
+    for (let i = 0; i < 2; i++) {
+        conditions.push({ targetSide: "right", gapSide: "left" });
+        conditions.push({ targetSide: "right", gapSide: "right" });
+    }
+    return shuffle(conditions);
+}
+
 function generateBlock2Conditions(targetId, withoutSearchPool) {
     const conditions = [];
-    // 4 "Тот же"
-    for (let i = 0; i < 4; i++) {
-        conditions.push({ probeId: targetId, isSame: true });
-    }
-    // 4 "Другой" — случайные стимулы из той же группы
-    for (let i = 0; i < 4; i++) {
+    for(let i=0; i<4; i++) conditions.push({probeId: targetId, isSame: true});
+    for(let i=0; i<4; i++) {
         const others = withoutSearchPool.filter(x => x !== targetId);
-        conditions.push({ probeId: sampleOne(others), isSame: false });
+        conditions.push({probeId: sampleOne(others), isSame: false});
     }
     return shuffle(conditions);
 }
@@ -291,11 +288,6 @@ const idTrial = {
         const TRAINING_TARGET = DISTRACTORS[0];
         const DISTRACTORS_WITHOUT_TRAINING = DISTRACTORS.slice(1);
 
-        console.log("SEED:", seed);
-        console.log("TRAINING_TARGET:", TRAINING_TARGET);
-        console.log("STIM_TEMPLATES:", STIM_TEMPLATES);
-        console.log("WITHOUT_SEARCH:", WITHOUT_SEARCH);
-
         const PRELOAD_IMAGES = [
             CONFIG.paths.ring_left, CONFIG.paths.ring_right,
             ...STIM_TEMPLATES.map(objPath), ...WITHOUT_SEARCH.map(objPath),
@@ -304,7 +296,6 @@ const idTrial = {
             objPath(TRAINING_TARGET)
         ];
 
-        // === ДОБАВЛЯЕМ ВСЕ ОСТАЛЬНЫЕ ТРИАЛЫ ===
         jsPsych.addNodeToEndOfTimeline({
             timeline: [
                 { type: jsPsychPreload, images: PRELOAD_IMAGES },
@@ -315,20 +306,19 @@ const idTrial = {
                         <p>В этом задании вам будут показывать необычные предметы.</p>
                         <p>Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
                         <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
-                // --- ТРЕНИРОВКА ПОИСКА ---
                 {
                     type: jsPsychHtmlKeyboardResponse,
                     stimulus: `<div class="screen-wrap"><div class="instr">
                         <h2>Тренировка: Поиск</h2>
                         <p>Сейчас будет тренировка. Вам нужно найти предмет среди 8 объектов.</p>
                         <p>Тренировка продлится до 5 правильных ответов.</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
                 {
                     timeline: [
@@ -364,23 +354,22 @@ const idTrial = {
                         <h2>Тренировка завершена!</h2>
                         <p>Теперь начинается основное задание. Обратной связи больше не будет.</p>
                         <p>Готовы приступить к основному блоку?</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
                 {
                     type: jsPsychHtmlKeyboardResponse,
                     stimulus: `<div class="screen-wrap"><div class="instr">
                         <h2>Блок 1: Поиск</h2>
                         <p>Запоминайте предметы и ищите их среди остальных объектов.</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
             ]
         });
 
-        // === БЛОК 1: STIM_TEMPLATES (8 раз подряд, без условия правильности) ===
         STIM_TEMPLATES.forEach((targetId) => {
             const conditions = generateBlock1Conditions();
             conditions.forEach((cond) => {
@@ -412,7 +401,6 @@ const idTrial = {
             });
         });
 
-        // === ТРЕНИРОВКА WITHOUT_SEARCH (SAME/DIFFERENT) ===
         const trainFamiliarConds = [];
         const diffStimId = DISTRACTORS_WITHOUT_TRAINING[0];
         for(let i=0; i<3; i++) trainFamiliarConds.push({probeId: TRAINING_TARGET, isSame: true});
@@ -430,9 +418,9 @@ const idTrial = {
                         <p><strong style="font-size: 22px; color: #c62828;">СТРЕЛКА ВЛЕВО (←) — ДРУГОЙ СТИМУЛ</strong></p>
                         <p>Сначала вы увидите предмет для запоминания. Затем появится предмет в сплошном кольце. Вам нужно решить, тот же это предмет или другой.</p>
                         <p>Тренировка продлится до 6 правильных ответов.</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
                 {
                     timeline: [
@@ -449,7 +437,7 @@ const idTrial = {
                                 window.currentTrainingProbe = probeId;
                                 return `<div class="screen-wrap">
                                             <div class="cue-wrap">
-                                                <div class="cue-label" style="font-size: 24px;">Тот же (→) или другой (←)?</div>
+                                                <div class="cue-label" style="font-size: 24px;">Другой (←) или тот же (→)?</div>
                                                 ${singleObjectWithFullRingHTML(objPath(probeId)).replace('<div class="screen-wrap">', '').replace('</div>', '')}
                                             </div>
                                         </div>`;
@@ -481,9 +469,9 @@ const idTrial = {
                         <h2>Тренировка завершена!</h2>
                         <p>Теперь начинается основное задание. Обратной связи больше не будет.</p>
                         <p>Готовы приступить к основному блоку?</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
                 {
                     type: jsPsychHtmlKeyboardResponse,
@@ -492,14 +480,13 @@ const idTrial = {
                         <p>Правила те же, что и в тренировке:</p>
                         <p><strong>ВПРАВО (→) — ТОТ ЖЕ, ВЛЕВО (←) — ДРУГОЙ.</strong></p>
                         <p>Старайтесь не отводить взгляд от предмета!</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
             ]
         });
 
-        // === БЛОК 2: WITHOUT_SEARCH (SAME/DIFFERENT, 8 раз подряд) ===
         WITHOUT_SEARCH.forEach((targetId) => {
             const block2Conds = generateBlock2Conditions(targetId, WITHOUT_SEARCH);
             block2Conds.forEach((cond) => {
@@ -509,19 +496,12 @@ const idTrial = {
                         makeStudyTrial(targetId, { block: "without_search" }),
                         makeFixationTrial({ block: "without_search" }),
                         makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "without_search" }),
-                        makeFamiliarTrial({
-                            targetId: cond.probeId,
-                            block: "without_search",
-                            condition: "without_search",
-                            isSame: cond.isSame,
-                            showLabel: false
-                        }),
+                        makeFamiliarTrial({ targetId: cond.probeId, block: "without_search", condition: "without_search", isSame: cond.isSame }),
                     ]
                 });
             });
         });
 
-        // === ФАЗА ПОИСКА (ТЕСТ) — 8 БЛОКОВ ПО 24 ПРОБЫ ===
         jsPsych.addNodeToEndOfTimeline({
             timeline: [
                 {
@@ -530,18 +510,16 @@ const idTrial = {
                         <h2>Фаза поиска (Тест)</h2>
                         <p>Теперь вам вновь необходимо искать предметы. Нужно будет найти определённый предмет среди других. После нахождения целевого объекта вам нужно ответить про разрыв кольца вокруг этого предмета.</p>
                         <p>Нажимайте <strong>${getKeyName(CONFIG.left_key)}</strong>, если разрыв слева, и <strong>${getKeyName(CONFIG.right_key)}</strong>, если разрыв справа.</p>
-                        <div class="small-note">Нажмите пробел, чтобы продолжить.</div>
+                        <div class="small-note">Нажмите любую клавишу, чтобы продолжить.</div>
                     </div></div>`,
-                    choices: ["Space"]
+                    choices: "ALL_KEYS"
                 },
             ]
         });
 
-        // Создаём перемешанный пул из 24 стимулов ОДИН РАЗ
         const testPool = [...STIM_TEMPLATES, ...WITHOUT_SEARCH, ...NEW_STIMS];
         const shuffledTestPool = shuffle(testPool);
 
-        // Повторяем этот порядок CONFIG.test_blocks_count раз
         for (let blockNum = 1; blockNum <= CONFIG.test_blocks_count; blockNum++) {
             shuffledTestPool.forEach((id) => {
                 let cond = "new_stims";
@@ -553,27 +531,16 @@ const idTrial = {
 
                 jsPsych.addNodeToEndOfTimeline({
                     timeline: [
-                        makeBlankTrial(CONFIG.blank_ms, { block: "test_search" }),
-                        makeCueTrial(id, false, { block: "test_search", condition: cond }),
-                        makeFixationTrial({ block: "test_search" }),
-                        makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "test_search" }),
-                        makeSearchTrial({
-                            targetId: id,
-                            distractorPool: [...DISTRACTORS_WITHOUT_TRAINING, ...NEWEST_STIMS],
-                            setSize: setSize,
-                            block: "test_search",
-                            condition: cond,
-                            gapSide: gapSide
-                        }),
+                        makeBlankTrial(CONFIG.blank_ms, { block: "test_search", test_block: blockNum }),
+                        makeCueTrial(id, false, { block: "test_search", condition: cond, test_block: blockNum }),
+                        makeFixationTrial({ block: "test_search", test_block: blockNum }),
+                        makeBlankTrial(CONFIG.blank_after_fixation_ms, { block: "test_search", test_block: blockNum }),
+                        makeSearchTrial({ targetId: id, distractorPool: [...DISTRACTORS_WITHOUT_TRAINING, ...NEWEST_STIMS], setSize: setSize, block: "test_search", condition: cond, gapSide: gapSide }),
                     ]
                 });
-
-                // Добавляем test_block_number к последнему trial
-                // (это хак: мы добавляем поле post-hoc через data)
             });
         }
 
-        // Конец
         jsPsych.addNodeToEndOfTimeline({
             timeline: [{
                 type: jsPsychHtmlKeyboardResponse,
@@ -587,22 +554,6 @@ const idTrial = {
         });
     },
 };
-
-/* =========================
-ГЕНЕРАЦИЯ УСЛОВИЙ ДЛЯ БЛОКА 1
-========================= */
-function generateBlock1Conditions() {
-    const conditions = [];
-    for (let i = 0; i < 2; i++) {
-        conditions.push({ targetSide: "left", gapSide: "left" });
-        conditions.push({ targetSide: "left", gapSide: "right" });
-    }
-    for (let i = 0; i < 2; i++) {
-        conditions.push({ targetSide: "right", gapSide: "left" });
-        conditions.push({ targetSide: "right", gapSide: "right" });
-    }
-    return shuffle(conditions);
-}
 
 /* =========================
 СТАРТОВЫЙ ЭКРАН
