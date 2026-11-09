@@ -42,7 +42,7 @@ const CONFIG = {
     new_stims_count: 8,
     newest_stims_count: 8,
 
-    test_blocks_count: 2,  // Для теста поставь 2, для основного эксперимента 8
+    test_blocks_count: 8,  // Для теста поставь 2, для основного эксперимента 8
 
     set_size: 8,  // Только один размер массива
 
